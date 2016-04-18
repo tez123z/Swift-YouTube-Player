@@ -38,6 +38,7 @@ public protocol YouTubePlayerDelegate {
     func playerReady(videoPlayer: YouTubePlayerView)
     func playerStateChanged(videoPlayer: YouTubePlayerView, playerState: YouTubePlayerState)
     func playerQualityChanged(videoPlayer: YouTubePlayerView, playbackQuality: YouTubePlaybackQuality)
+    func playerAudioReady(videoPlayer: YouTubePlayerView, audioURL: NSURL)
 }
 
 // Make delegate methods optional by providing default implementations
@@ -173,7 +174,7 @@ public class YouTubePlayerView: UIView, UIWebViewDelegate {
                                 
                             }
                             catch let JSONError as NSError {
-                                print("\(JSONError)")
+                                print("JSONError \(JSONError)")
                             }
                             catch {
                                 print("unknown error in JSON Parsing");
