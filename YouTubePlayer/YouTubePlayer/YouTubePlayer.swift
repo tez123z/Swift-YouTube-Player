@@ -22,6 +22,7 @@ public enum YouTubePlayerEvents: String {
     case Ready = "onReady"
     case StateChange = "onStateChange"
     case PlaybackQualityChange = "onPlaybackQualityChange"
+    case AudioURLReady = "onAudioURLReady"
 }
 
 public enum YouTubePlaybackQuality: String {
@@ -45,6 +46,7 @@ public extension YouTubePlayerDelegate {
     func playerReady(videoPlayer: YouTubePlayerView) {}
     func playerStateChanged(videoPlayer: YouTubePlayerView, playerState: YouTubePlayerState) {}
     func playerQualityChanged(videoPlayer: YouTubePlayerView, playbackQuality: YouTubePlaybackQuality) {}
+    func playerAudioReady(videoPlayer: YouTubePlayerView, audioURL: NSURL) {}
     
 }
 
@@ -83,7 +85,10 @@ public class YouTubePlayerView: UIView, UIWebViewDelegate {
     public typealias YouTubePlayerParameters = [String: AnyObject]
 
     private var webView: UIWebView!
-
+    
+    /** Player Soley for audio */
+    private(set) public var forAudio = false
+    
     /** The readiness of the player */
     private(set) public var ready = false
 
@@ -106,6 +111,16 @@ public class YouTubePlayerView: UIView, UIWebViewDelegate {
         super.init(frame: frame)
         buildWebView(playerParameters())
     }
+    
+    public init(frame: CGRect,forAudio:Bool) {
+        super.init(frame: frame)
+        
+        self.forAudio = forAudio
+        
+        if !self.forAudio{
+            buildWebView(playerParameters())
+        }
+    }
 
     required public init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
@@ -116,9 +131,11 @@ public class YouTubePlayerView: UIView, UIWebViewDelegate {
         super.layoutSubviews()
 
         // Remove web view in case it's within view hierarchy, reset frame, add as subview
-        webView.removeFromSuperview()
-        webView.frame = bounds
-        addSubview(webView)
+        if !self.forAudio{
+            webView.removeFromSuperview()
+            webView.frame = bounds
+            addSubview(webView)
+        }
     }
 
 
@@ -131,7 +148,49 @@ public class YouTubePlayerView: UIView, UIWebViewDelegate {
         webView.delegate = self
         webView.scrollView.scrollEnabled = false
     }
+    
+    public func loadAudioURL(audioURL: String){
+        
+        let url = NSURL(string: "http://www.youtubeinmp3.com/fetch/?format=JSON&video=\(audioURL)")
+        let sessionConfig = NSURLSessionConfiguration.defaultSessionConfiguration()
+        let session = NSURLSession(configuration: sessionConfig, delegate: nil, delegateQueue: nil)
+        let request = NSMutableURLRequest(URL: url!)
+        request.HTTPMethod = "GET"
+        
+        let task = session.dataTaskWithRequest(request, completionHandler: { (data: NSData?, response: NSURLResponse?, error: NSError?) -> Void in
+            if (error == nil) {
+                if let response = response as? NSHTTPURLResponse {
+                    print("response=\(response)")
+                    if response.statusCode == 200 {
+                        if data != nil {
+                            do {
+                                let responseJSON =  try  NSJSONSerialization.JSONObjectWithData(data!, options: NSJSONReadingOptions.AllowFragments) as! NSDictionary;
+                                let urlString = responseJSON["link"] as! String
+                                let directDownloadURL = NSURL(string: urlString)
+                                
+                                self.delegate?.playerAudioReady(self, audioURL: directDownloadURL!)
 
+                                
+                            }
+                            catch let JSONError as NSError {
+                                print("\(JSONError)")
+                            }
+                            catch {
+                                print("unknown error in JSON Parsing");
+                            }
+                            
+                        }
+                    }
+                }
+            }
+            else {
+                print("Failure: \(error!.localizedDescription)");
+            }
+        })
+        
+        task.resume()
+        
+    }
 
     // MARK: Load player
 
@@ -319,6 +378,8 @@ public class YouTubePlayerView: UIView, UIWebViewDelegate {
                     }
 
                     break
+                default:
+                break
             }
         }
     }
